@@ -3,7 +3,6 @@ Docker container monitor plugin for Open-Falcon  Micadvisor-Open
 描述
 --------
 本项目是基于小米开发的micadvisor_open项目，对上报数据引擎进行了修改，使其更容易维护和扩展，并且减少了依赖包.
-项目原创人：mengzhuo: QQ:296142139; MAIL:mengzhuo@xiaomi.com
 
 build和启动方法：
 -----------------
@@ -43,4 +42,5 @@ chmod +x build.sh
 
 Contributors
 ------------------------------------------
-- yihongfei  QQ:413999317, MAIL:yihf@liepin.com
+原项目作者：mengzhuo   QQ:296142139, MAIL:mengzhuo@xiaomi.com
+本项目作者: yihongfei  QQ:413999317, MAIL:yihf@liepin.com
