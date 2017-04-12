@@ -21,6 +21,10 @@ chmod +x build.sh
 5  增加了更多异常log,方便问题排查
 ```
 
+编译和运行环境
+-------------------------
+docker v1.12.1
+golang v1.6.3
 
 采集的指标
 --------------------------
@@ -42,5 +46,5 @@ chmod +x build.sh
 
 Contributors
 ------------------------------------------
-原项目作者：mengzhuo   QQ:296142139, MAIL:mengzhuo@xiaomi.com
+原项目作者：mengzhuo   QQ:296142139, MAIL:mengzhuo@xiaomi.com </p>
 本项目作者: yihongfei  QQ:413999317, MAIL:yihf@liepin.com
