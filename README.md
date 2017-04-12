@@ -23,7 +23,7 @@ chmod +x build.sh
 
 编译和运行环境
 -------------------------
-docker v1.12.1
+docker v1.12.1</p>
 golang v1.6.3
 
 采集的指标
