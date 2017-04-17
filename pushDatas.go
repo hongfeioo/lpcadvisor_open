@@ -90,7 +90,7 @@ func pushData() {
 		}
 
 		//-----IO上报-------------
-		if err := pushDiskIo(c, timestamp, tag, a[i].ID, endpoint); err != nil {
+		if err := pushDiskIo(c, timestamp, tag, a[i].ID, endpoint+"-"+containerIP); err != nil {
 			LogErr(err, "from pushDatas.go pushDisoIo function")
 		}
 
