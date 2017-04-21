@@ -31,12 +31,15 @@ golang v1.6.3
 | Counters | Notes|
 |-----|------|
 |cpu.loadaverage|cpu的平均负载|
-|cpu.usageTotalPercent|cpu的整体负载,单位(容器cpu占用时间/百万分之一秒)*100%|
+|cpu.usageTotalSec|cpu的整体负载,单位秒|
 |disk.io.read_MBps|硬盘读取速度，单位MBps|
 |disk.io.write_MBps|硬盘写入速度，单位MBps|
 |mem.memtotal|内存总量，即容器的内存limit值|
 |mem.memused|内存使用量|
-|mem.memused.percent|内存占用比|
+|mem.totalUsed.percent|整体内存使用占比|
+|mem.Rss.percent| RSS在内存总量中的占比|
+|mem.cache.percent| Cache在内存总量中的占比|
+|mem.WorkingSet.percent| WorkingSet在内存总量中的占比|
 |net.rx.KBps|网卡接收数据包速度,单位KBps|
 |net.rxDrop.packets|网卡收包丢包量,单位包|
 |net.tx.KBps|网卡发送数据包速度,单位KBps|
