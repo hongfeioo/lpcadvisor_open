@@ -10,11 +10,6 @@ import (
 	"time"
 )
 
-var (
-	cpuNum   int64
-	countNum int
-)
-
 func pushData() {
 	//AllDockerBrief 变量存放所有docker的基本信息JSON格式 ，   原理  (echo -e "GET /containers/json HTTP/1.1\r\nHost: www.test.com\r\n")|nc -U //var/run/docker.sock
 	AllDockerBrief, err1 := getAllDockerBrief()
@@ -49,7 +44,7 @@ func pushData() {
 		containerIP := b.NetworkSettings.IPAddress + "/" + strconv.Itoa(b.NetworkSettings.IPPrefixLen)
 		tag := "" //函数已经有了，目前没用上，对应的容器的label
 
-		//LogRun("=>" + endpoint + "=>" + containerIP) //  可以通过inspect获取容器的IP
+		LogRun("=>" + endpoint + "=>" + containerIP) //  可以通过inspect获取容器的IP
 
 		//----------------------------------------
 		//---通过容器ID, 获取容器对应的cadvisor的详细信息---
@@ -79,12 +74,12 @@ func pushData() {
 		timestamp := fmt.Sprintf("%d", time.Now().Unix()) //时间格式变化会上报失败，timestamp := time.Now().Format("2006-01-02 15:04:05")
 
 		//---内存上报---------
-		if err := pushMem(c, timestamp, tag, a[i].ID, endpoint+"-"+containerIP); err != nil { //get cadvisor data about Memery
+		if err := pushMem(c, timestamp, tag, a[i].ID, endpoint); err != nil { //get cadvisor data about Memery
 			LogErr(err, "from pushDatas.go pushMem function  ")
 		}
 
 		//-----cpu上报------------
-		if err := NewPushCPU(c, timestamp, tag, a[i].ID, endpoint+"-"+containerIP); err != nil {
+		if err := NewPushCPU(c, timestamp, tag, a[i].ID, endpoint); err != nil {
 			LogErr(err, "from pushDatas.go NewPushCPU function  ")
 
 		}
@@ -95,7 +90,7 @@ func pushData() {
 		}
 
 		//------网卡流量上报--------
-		if err := NewPushNetwork(c, timestamp, tag, a[i].ID, endpoint+"-"+containerIP); err != nil {
+		if err := NewPushNetwork(c, timestamp, tag, a[i].ID, endpoint); err != nil {
 			LogErr(err, "from pushDatas.go NewPushNetwork function  ")
 		}
 
@@ -110,6 +105,7 @@ func pushMem(_c ContainerInfo, timestamp, tags, containerID, endpoint string) er
 
 	memLimit := _c.Spec.Memory.Limit //资源配额是个固定值，取一次即可
 
+	//-----求出memUsage平均值－－－－－－－－
 	var memUseage uint64
 	for _, u := range _c.Stats {
 		//LogRun(strconv.Itoa(i) + fmt.Sprint(u.Memory.Usage))
@@ -117,14 +113,29 @@ func pushMem(_c ContainerInfo, timestamp, tags, containerID, endpoint string) er
 	}
 	memUseage = (memUseage) / uint64(len(_c.Stats)) // 内存用量是个变动数值，把stats数组中的所有数值加起来，求平均，以防止某一个为空造成的取值不准。
 
+	//-----求出memcache平均值－－－－－－－－
+	var memCache uint64
+	for _, u := range _c.Stats {
+		memCache += u.Memory.Cache
+	}
+	memCache = memCache / uint64(len(_c.Stats))
+
+	//-----求出rss平均值－－－－－－－－
+	var memRss uint64
+	for _, u := range _c.Stats {
+		memRss += u.Memory.RSS
+	}
+	memRss = memRss / uint64(len(_c.Stats))
+
+	//-------求出working_set平均值---------------------
+	var memWorkingSet uint64
+	for _, u := range _c.Stats {
+		memWorkingSet += u.Memory.WorkingSet
+	}
+	memWorkingSet = memWorkingSet / uint64(len(_c.Stats))
+
 	//LogRun(fmt.Sprint(float64(memUseage)) + "---" + fmt.Sprint(float64(memLimit)))
 
-	//上报内存使用率
-	memUsagePrecent := float64(memUseage) / float64(memLimit) // 注意上报的这个数值已经乘以了100，即：上报的是百分数
-	if err := pushIt(fmt.Sprintf("%.1f", memUsagePrecent*100), timestamp, "mem.memused.percent", tags, containerID, "GAUGE", endpoint); err != nil {
-		// LogErr(err, "pushIt err in pushMem")
-		return err
-	}
 	// 上报内存使用量
 	if err := pushIt(fmt.Sprint(memUseage), timestamp, "mem.memused", tags, containerID, "GAUGE", endpoint); err != nil {
 		//LogErr(err, "pushIt err in pushMem")
@@ -133,6 +144,34 @@ func pushMem(_c ContainerInfo, timestamp, tags, containerID, endpoint string) er
 	// 上报内存总量
 	if err := pushIt(fmt.Sprint(memLimit), timestamp, "mem.memtotal", tags, containerID, "GAUGE", endpoint); err != nil {
 		//LogErr(err, "pushIt err in pushMem")
+		return err
+	}
+
+	//上报总内存使用率
+	memUsagePrecent := float64(memUseage) / float64(memLimit) // 注意上报的这个数值已经乘以了100，即：上报的是百分数
+	if err := pushIt(fmt.Sprintf("%.3f", memUsagePrecent*100), timestamp, "mem.totalUsed.percent", tags, containerID, "GAUGE", endpoint); err != nil {
+		// LogErr(err, "pushIt err in pushMem")
+		return err
+	}
+
+	//(rss)memlimit
+	memRssUsagePrecent := float64(memRss) / float64(memLimit) // 注意上报的这个数值已经乘以了100，即：上报的是百分数
+	if err := pushIt(fmt.Sprintf("%.3f", memRssUsagePrecent*100), timestamp, "mem.Rss.percent", tags, containerID, "GAUGE", endpoint); err != nil {
+		// LogErr(err, "pushIt err in pushMem")
+		return err
+	}
+
+	//(cache)memlimit
+	memCacheUsagePrecent := float64(memCache) / float64(memLimit) // 注意上报的这个数值已经乘以了100，即：上报的是百分数
+	if err := pushIt(fmt.Sprintf("%.3f", memCacheUsagePrecent*100), timestamp, "mem.cache.percent", tags, containerID, "GAUGE", endpoint); err != nil {
+		// LogErr(err, "pushIt err in pushMem")
+		return err
+	}
+
+	//(WorkingSet)memlimit
+	memWorkingSetUsagePrecent := float64(memWorkingSet) / float64(memLimit) // 注意上报的这个数值已经乘以了100，即：上报的是百分数
+	if err := pushIt(fmt.Sprintf("%.3f", memWorkingSetUsagePrecent*100), timestamp, "mem.WorkingSet.percent", tags, containerID, "GAUGE", endpoint); err != nil {
+		// LogErr(err, "pushIt err in pushMem")
 		return err
 	}
 
@@ -173,51 +212,97 @@ func pushDiskIo(_c ContainerInfo, timestamp, tags, containerID, endpoint string)
 
 //NewPushCPU  函数用于上报stats结构体中cpu的信息，这些是全部的信息了。
 //简单的做了一个除法，从ns->us->ms->s换算为s , 这个数值应该可以说明cpu的事情情况，以后有更优秀的算法再改进。
+//20170419 修改NewPushCPU函数， 因为发现stats 中的cpu时间为增量值，需要计算出变化量。
+
 func NewPushCPU(_c ContainerInfo, timestamp, tags, containerID, endpoint string) error {
 	LogRun("begin to push CPU Info")
 
-	// 以下三个参数是可以提供上报的，暂时隐藏掉。
-	// cpuUsageUser := _c.Stats[STATSINDEX].Cpu.Usage.User        用户空间占用的cpu量
-	// cpuUsageSystem := _c.Stats[STATSINDEX].Cpu.Usage.System     内核空间占用的cpu值
-	// cpuUsagePerCPUUsage := _c.Stats[STATSINDEX].Cpu.Usage.PerCpu     // 每个cpu核心占用的cpu量值
-
+	//---计算cpuLoadAverage-------
 	var cpuLoadAverage int32
-	var cpuUsageTotal uint64
+
 	for _, u := range _c.Stats {
 
 		//LogRun(strconv.Itoa(i) + "--" + fmt.Sprint(u.Cpu.LoadAverage) + "---" + fmt.Sprint(u.Cpu.Usage.Total))
 		cpuLoadAverage += u.Cpu.LoadAverage
-		cpuUsageTotal += u.Cpu.Usage.Total
-
 	}
 	cpuLoadAverage = cpuLoadAverage / int32(len(_c.Stats))
-	cpuUsageTotal = cpuUsageTotal / uint64(len(_c.Stats))
+
+	//---计算cpuUsageTotal -----
+	var cpuUsageTotal uint64
+	LogRun("NeWPushCPU len([]Stats) should be >= 2 , now is " + strconv.Itoa(len(_c.Stats)))
+
+	if len(_c.Stats) < 2 {
+
+		if err := pushIt("0", timestamp, "cpu.usageTotalPercent", tags, containerID, "GAUGE", endpoint); err != nil {
+			return err
+		}
+		return nil
+
+	}
+	// 阶梯运算，取出所有的差值
+	for i := 0; i < len(_c.Stats)-1; i++ {
+		//LogRun(strconv.Itoa(i) + "--" + fmt.Sprint(_c.Stats[i+1].Cpu.Usage.Total-_c.Stats[i].Cpu.Usage.Total))
+		cpuUsageTotal += _c.Stats[i+1].Cpu.Usage.Total - _c.Stats[i].Cpu.Usage.Total
+	}
+	//求差值的平均值
+	cpuUsageTotal = cpuUsageTotal / uint64(len(_c.Stats)-1)
 
 	// 上报cpuload平均值， 这个值测试阶段一直为0，不知道线上知否能用到
 	if err := pushIt(fmt.Sprintf("%.2f", float64(cpuLoadAverage)), timestamp, "cpu.loadaverage", tags, containerID, "GAUGE", endpoint); err != nil {
 		return err
 	}
-	//上报cpu的总使用量，包括用户空间＋内核  1000,000,000,000,000 * 100%   这个数值和docker stats 观察到的cpu百分比很像， 估且就当作百分比吧，如果不是至少可以从这个数值看出cpu的负载情况。
-	//即(cpu耗时 / 百万分之一秒) *100%   和cpu使用率很像。
-	if err := pushIt(fmt.Sprintf("%.5f", float64(cpuUsageTotal)/10000000000000), timestamp, "cpu.usageTotalPercent", tags, containerID, "GAUGE", endpoint); err != nil {
+
+	if err := pushIt(fmt.Sprint(float64(cpuUsageTotal)/1000000000), timestamp, "cpu.usageTotalSec", tags, containerID, "GAUGE", endpoint); err != nil {
 		return err
 	}
-	// if err := pushIt(fmt.Sprintf("%.2f", float64(cpuUsageUser)/1000000000), timestamp, "cpu.UsageUser", tags, containerID, "GAUGE", endpoint); err != nil {
-	// 	return err
-	// }
-	// if err := pushIt(fmt.Sprintf("%.2f", float64(cpuUsageSystem)/1000000000), timestamp, "cpu.UsageSystem", tags, containerID, "GAUGE", endpoint); err != nil {
-	// 	return err
-	// }
-	// for i, u := range cpuUsagePerCPUUsage {
-	//
-	// 	if err := pushIt(fmt.Sprintf("%.2f", float64(u)/1000000000), timestamp, "cpu.perCpuUsage-"+strconv.Itoa(i), tags, containerID, "GAUGE", endpoint); err != nil {
-	// 		return err
-	// 	}
-	//
-	// }
-	return nil
 
+	return nil
 }
+
+// func NewPushCPU(_c ContainerInfo, timestamp, tags, containerID, endpoint string) error {
+// 	LogRun("begin to push CPU Info")
+//
+// 	// 以下三个参数是可以提供上报的，暂时隐藏掉。
+// 	// cpuUsageUser := _c.Stats[STATSINDEX].Cpu.Usage.User        用户空间占用的cpu量
+// 	// cpuUsageSystem := _c.Stats[STATSINDEX].Cpu.Usage.System     内核空间占用的cpu值
+// 	// cpuUsagePerCPUUsage := _c.Stats[STATSINDEX].Cpu.Usage.PerCpu     // 每个cpu核心占用的cpu量值
+//
+// 	var cpuLoadAverage int32
+// 	var cpuUsageTotal uint64
+// 	for _, u := range _c.Stats {
+//
+// 		//LogRun(strconv.Itoa(i) + "--" + fmt.Sprint(u.Cpu.LoadAverage) + "---" + fmt.Sprint(u.Cpu.Usage.Total))
+// 		cpuLoadAverage += u.Cpu.LoadAverage
+// 		cpuUsageTotal += u.Cpu.Usage.Total
+//
+// 	}
+// 	cpuLoadAverage = cpuLoadAverage / int32(len(_c.Stats))
+// 	cpuUsageTotal = cpuUsageTotal / uint64(len(_c.Stats))
+//
+// 	// 上报cpuload平均值， 这个值测试阶段一直为0，不知道线上知否能用到
+// 	if err := pushIt(fmt.Sprintf("%.2f", float64(cpuLoadAverage)), timestamp, "cpu.loadaverage", tags, containerID, "GAUGE", endpoint); err != nil {
+// 		return err
+// 	}
+// 	//上报cpu的总使用量，包括用户空间＋内核  1000,000,000,000,000 * 100%   这个数值和docker stats 观察到的cpu百分比很像， 估且就当作百分比吧，如果不是至少可以从这个数值看出cpu的负载情况。
+// 	//即(cpu耗时 / 百万分之一秒) *100%   和cpu使用率很像。
+// 	if err := pushIt(fmt.Sprintf("%.5f", float64(cpuUsageTotal)/10000000000000), timestamp, "cpu.usageTotalPercent", tags, containerID, "GAUGE", endpoint); err != nil {
+// 		return err
+// 	}
+// 	// if err := pushIt(fmt.Sprintf("%.2f", float64(cpuUsageUser)/1000000000), timestamp, "cpu.UsageUser", tags, containerID, "GAUGE", endpoint); err != nil {
+// 	// 	return err
+// 	// }
+// 	// if err := pushIt(fmt.Sprintf("%.2f", float64(cpuUsageSystem)/1000000000), timestamp, "cpu.UsageSystem", tags, containerID, "GAUGE", endpoint); err != nil {
+// 	// 	return err
+// 	// }
+// 	// for i, u := range cpuUsagePerCPUUsage {
+// 	//
+// 	// 	if err := pushIt(fmt.Sprintf("%.2f", float64(u)/1000000000), timestamp, "cpu.perCpuUsage-"+strconv.Itoa(i), tags, containerID, "GAUGE", endpoint); err != nil {
+// 	// 		return err
+// 	// 	}
+// 	//
+// 	// }
+// 	return nil
+// }
 
 //NewPushNetwork 函数作用为容器上报网卡流量
 // 由于采集的是网卡的累计值，每次采集的stats数组数量又不确定，所以书写算法：  stats_rxbytes[i+1] - stats_rxbytes[i]   , 依次可以计算出多个增量值， 返回增量值的平均数。
