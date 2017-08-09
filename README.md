@@ -50,4 +50,4 @@ golang v1.6.3
 Contributors
 ------------------------------------------
 原项目作者：mengzhuo   QQ:296142139, MAIL:mengzhuo@xiaomi.com </p>
-本项目作者: yihongfei  QQ:413999317, MAIL:yihf@liepin.com
+本项目作者: yihongfei  QQ:413999317, MAIL:yihongfei@xiaomi.com
